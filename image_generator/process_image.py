@@ -1,17 +1,18 @@
 import random
 import cv2 as cv
+import numpy as np
 import dlib
 import imutils
 from imutils import face_utils
-from image_helpers import *
+from image_generator.image_helpers import overlay_transparent, crop_to_bbox
 from pathlib import Path
-from face_shapes import *
+from image_generator.face_shapes import create_mouth_rectangle
 
 import urllib.request
 from io import BytesIO
 
 det = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor('data/shape_predictor_68_face_landmarks.dat')
+predictor = dlib.shape_predictor('image_generator/data/shape_predictor_68_face_landmarks.dat')
 
 def process_image(url):
 
@@ -36,7 +37,7 @@ def process_image(url):
         mouth_rect = create_mouth_rectangle(shape)
         cv.rectangle(img, (mouth_rect[0], mouth_rect[1]), (mouth_rect[2], mouth_rect[3]), (0, 255, 0), 2)
 
-        smiles_path = Path('smiles')
+        smiles_path = Path('image_generator/smiles')
         smile_files = [entry for entry in smiles_path.iterdir() if entry.is_file()]
         smile_img = random.choice(smile_files)
         crop_to_bbox(smile_img)
@@ -68,5 +69,5 @@ def process_image(url):
 
     status_code, img = cv.imencode(".jpg",img)
     
-    return img
+    return img.tobytes()
         
