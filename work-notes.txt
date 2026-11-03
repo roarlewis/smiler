@@ -115,4 +115,3 @@ def download_text():
 – Deactivating the virtualenv with the command:
   deactivate
 
-Test update
