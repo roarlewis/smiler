@@ -10,7 +10,7 @@ app = Flask(__name__)
 def hello_world():
     return "<p>Hello, World!</p>"
 
-@app.route('/convert-image/<url>'):
+@app.route('/convert-image/<url>')
 def convert_image(url):
 
     # Could do this later ...
@@ -27,7 +27,7 @@ def convert_image(url):
         converted_image,
         mimetype="image/jpeg",
         as_attachment=True,
-        download_name="dynamic_hello.txt"
+        download_name="img.jpg"
     )
 
 
