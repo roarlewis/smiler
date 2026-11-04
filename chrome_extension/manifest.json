@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "SMILR",
+  "description": "make you happy :)",
+  "version": "0.1",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "js": [
+        "content_smiler.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "options_page": "options.html",
+  "icons": {
+    "128": "images/smile icon.png"
+  },
+  "permissions": [
+    "storage"
+  ]
+}

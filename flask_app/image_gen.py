@@ -33,6 +33,3 @@ def convert_image():
         mimetype="image/jpeg",
         as_attachment=False
     )
-
-
-    
