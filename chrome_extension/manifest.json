@@ -3,13 +3,16 @@
   "name": "SMILR",
   "description": "make you happy :)",
   "version": "0.1",
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": [
         "*://*/*"
       ],
       "js": [
-        "content_smiler.js"
+        "content_smiler_fancy.js"
       ],
       "run_at": "document_end"
     }
@@ -20,5 +23,8 @@
   },
   "permissions": [
     "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:5000/*"
   ]
 }

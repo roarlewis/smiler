@@ -4,22 +4,58 @@ import numpy as np
 import dlib
 import imutils
 from imutils import face_utils
-from image_generator.image_helpers import overlay_transparent, crop_to_bbox
+from image_generator.image_helpers import overlay_transparent
 from pathlib import Path
 from image_generator.face_shapes import create_mouth_rectangle
 
 import urllib.request
 from io import BytesIO
+import threading
 
-det = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor('image_generator/data/shape_predictor_68_face_landmarks.dat')
+# dlib's detector and predictor aren't thread-safe, so each Flask
+# request thread gets its own copy instead of sharing one
+thread_models = threading.local()
+
+
+# added by claude to fix seg faults
+def get_models():
+    if not hasattr(thread_models, 'det'):
+        thread_models.det = dlib.get_frontal_face_detector()
+        thread_models.predictor = dlib.shape_predictor('image_generator/data/shape_predictor_68_face_landmarks.dat')
+    return thread_models.det, thread_models.predictor
+
+
+# load and crop the smiles once at startup, in memory, so requests never
+# rewrite the PNG files (concurrent rewrites were corrupting them)
+def load_smiles():
+    smiles = []
+    for entry in Path('image_generator/smiles').iterdir():
+        smile = cv.imread(str(entry), cv.IMREAD_UNCHANGED)
+        if smile is None or smile.ndim != 3 or smile.shape[2] != 4:
+            continue
+        # crop away the fully transparent border
+        ys, xs = np.nonzero(smile[:, :, 3])
+        smiles.append(smile[ys.min():ys.max() + 1, xs.min():xs.max() + 1])
+    return smiles
+
+smile_images = load_smiles()
 
 def process_image(url):
 
-    response = urllib.request.urlopen(url)
+    det, predictor = get_models()
+
+    request = urllib.request.Request(url, headers={'User-Agent': 'SMILR/0.1'})
+    response = urllib.request.urlopen(request)
     
     img_array = np.array( bytearray(response.read()), dtype=np.uint8 )
     img = cv.imdecode( img_array, -1)
+
+    if img is None:
+        raise ValueError('could not decode image')
+    if img.ndim == 2:
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+    elif img.shape[2] == 4:
+        img = cv.cvtColor(img, cv.COLOR_BGRA2BGR)
 
     # img = cv.resize(img, (500, 500), interpolation=cv.INTER_LINEAR)
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -35,13 +71,9 @@ def process_image(url):
         # [i.e., (x, y, w, h)], then draw the face bounding box
         (x, y, w, h) = face_utils.rect_to_bb(rect)
         mouth_rect = create_mouth_rectangle(shape)
-        cv.rectangle(img, (mouth_rect[0], mouth_rect[1]), (mouth_rect[2], mouth_rect[3]), (0, 255, 0), 2)
+        # cv.rectangle(img, (mouth_rect[0], mouth_rect[1]), (mouth_rect[2], mouth_rect[3]), (0, 255, 0), 2)
 
-        smiles_path = Path('image_generator/smiles')
-        smile_files = [entry for entry in smiles_path.iterdir() if entry.is_file()]
-        smile_img = random.choice(smile_files)
-        crop_to_bbox(smile_img)
-        smile_img = cv.imread(smile_img, cv.IMREAD_UNCHANGED)
+        smile_img = random.choice(smile_images)
 
         smile_resize = 1.8
         smile_width = (mouth_rect[2]-mouth_rect[0])
@@ -57,7 +89,7 @@ def process_image(url):
         # righteye_rect = create_righteye_rectangle(shape)
         # cv.rectangle(img, (righteye_rect[0], righteye_rect[1]), (righteye_rect[2], righteye_rect[3]), (0, 255, 0), 2)
 
-        cv.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # cv.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         # show the face number
         # cv.putText(img, "Face #{}".format(i + 1), (x - 10, y - 10),
