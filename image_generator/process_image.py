@@ -12,17 +12,14 @@ import urllib.request
 from io import BytesIO
 import threading
 
-# dlib's detector and predictor aren't thread-safe, so each Flask
-# request thread gets its own copy instead of sharing one
-thread_models = threading.local()
+det = dlib.get_frontal_face_detector()
+predictor = dlib.shape_predictor('image_generator/data/shape_predictor_68_face_landmarks.dat')
 
-
-# added by claude to fix seg faults
-def get_models():
-    if not hasattr(thread_models, 'det'):
-        thread_models.det = dlib.get_frontal_face_detector()
-        thread_models.predictor = dlib.shape_predictor('image_generator/data/shape_predictor_68_face_landmarks.dat')
-    return thread_models.det, thread_models.predictor
+# added by claude to fix seg faults: dlib's detector and predictor aren't
+# thread-safe, so only one Flask request thread may use them at a time.
+# (Flask starts a new thread per request, so per-thread copies reloaded
+# the 100 MB model on every request.)
+dlib_lock = threading.Lock()
 
 
 # load and crop the smiles once at startup, in memory, so requests never
@@ -42,8 +39,6 @@ smile_images = load_smiles()
 
 def process_image(url):
 
-    det, predictor = get_models()
-
     request = urllib.request.Request(url, headers={'User-Agent': 'SMILR/0.1'})
     response = urllib.request.urlopen(request)
     
@@ -59,13 +54,15 @@ def process_image(url):
 
     # img = cv.resize(img, (500, 500), interpolation=cv.INTER_LINEAR)
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    face_rects = det(img_gray, 1)
+    with dlib_lock:
+        face_rects = det(img_gray, 1)
 
     for (i, rect) in enumerate(face_rects):
         # determine the facial landmarks for the face region, then
         # convert the facial landmark (x, y)-coordinates to a NumPy
         # array
-        shape = predictor(img_gray, rect)
+        with dlib_lock:
+            shape = predictor(img_gray, rect)
         shape = face_utils.shape_to_np(shape)
         # convert dlib's rectangle to a OpenCV-style bounding box
         # [i.e., (x, y, w, h)], then draw the face bounding box
